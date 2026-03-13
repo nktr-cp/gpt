@@ -26,6 +26,7 @@ class TrainingConfig:
     log_interval: int = 20
     tokenizer_kind: str = "bpe"
     bpe_vocab_size: int = 128
+    positional_strategy: str = "learned"
 
     def model_config(self, vocab_size: int) -> GPTConfig:
         return GPTConfig(
@@ -34,6 +35,7 @@ class TrainingConfig:
             n_layer=self.n_layer,
             n_head=self.n_head,
             n_embd=self.n_embd,
+            positional_strategy=self.positional_strategy,
         )
 
 

@@ -20,6 +20,7 @@ class GPTConfig:
     n_head: int
     n_embd: int
     expansion_factor: int = 4
+    positional_strategy: str = "learned"
 
     def to_dict(self) -> dict[str, int]:
         return asdict(self)
@@ -42,12 +43,14 @@ class GPT(nn.Module):
             vocab_size=config.vocab_size,
             block_size=config.block_size,
             n_embd=config.n_embd,
+            positional_strategy=config.positional_strategy,
         )
         self.blocks = nn.ModuleList(
             TransformerBlock(
                 n_embd=config.n_embd,
                 n_head=config.n_head,
                 expansion_factor=config.expansion_factor,
+                positional_strategy=config.positional_strategy,
             )
             for _ in range(config.n_layer)
         )
@@ -74,7 +77,11 @@ class GPT(nn.Module):
             cache = [None] * len(self.blocks)
 
         for block, layer_cache in zip(self.blocks, cache, strict=False):
-            x, updated_cache = block.forward_with_cache(x, cache=layer_cache)
+            x, updated_cache = block.forward_with_cache(
+                x,
+                cache=layer_cache,
+                position_offset=position_offset,
+            )
             next_cache.append(updated_cache)
 
         x = self.final_norm(x)

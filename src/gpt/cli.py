@@ -37,6 +37,11 @@ def build_parser() -> ArgumentParser:
     train_parser.add_argument("--n-layer", type=int, default=2)
     train_parser.add_argument("--n-head", type=int, default=4)
     train_parser.add_argument("--n-embd", type=int, default=64)
+    train_parser.add_argument(
+        "--positional-strategy",
+        choices=["learned", "rope"],
+        default="learned",
+    )
     train_parser.add_argument("--learning-rate", type=float, default=1e-3)
     train_parser.add_argument("--num-steps", type=int, default=200)
     train_parser.add_argument("--log-interval", type=int, default=20)
@@ -86,6 +91,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             n_layer=args.n_layer,
             n_head=args.n_head,
             n_embd=args.n_embd,
+            positional_strategy=args.positional_strategy,
             learning_rate=args.learning_rate,
             num_steps=args.num_steps,
             log_interval=args.log_interval,

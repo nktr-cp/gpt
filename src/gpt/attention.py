@@ -7,6 +7,8 @@ import math
 import torch
 from torch import Tensor, nn
 
+from .rope import RotaryEmbedding
+
 LayerCache = tuple[Tensor, Tensor]
 
 
@@ -17,17 +19,18 @@ def causal_mask(sequence_length: int, device: torch.device) -> Tensor:
 class SingleHeadCausalSelfAttention(nn.Module):
     """A single masked self-attention head for decoder-only GPT."""
 
-    def __init__(self, *, n_embd: int) -> None:
+    def __init__(self, *, n_embd: int, use_rope: bool = False) -> None:
         super().__init__()
         self.n_embd = n_embd
         self.query = nn.Linear(n_embd, n_embd, bias=False)
         self.key = nn.Linear(n_embd, n_embd, bias=False)
         self.value = nn.Linear(n_embd, n_embd, bias=False)
+        self.rope = RotaryEmbedding(n_embd) if use_rope else None
 
     def forward(self, x: Tensor) -> Tensor:
         return self.inspect(x)["output"]
 
-    def inspect(self, x: Tensor) -> dict[str, Tensor]:
+    def inspect(self, x: Tensor, *, position_offset: int = 0) -> dict[str, Tensor]:
         if x.ndim != 3:
             msg = "x must have shape (batch_size, sequence_length, n_embd)"
             raise ValueError(msg)
@@ -39,6 +42,9 @@ class SingleHeadCausalSelfAttention(nn.Module):
         q = self.query(x)
         k = self.key(x)
         v = self.value(x)
+        if self.rope is not None:
+            q = self.rope.apply(q.unsqueeze(1), position_offset=position_offset).squeeze(1)
+            k = self.rope.apply(k.unsqueeze(1), position_offset=position_offset).squeeze(1)
         scale = 1.0 / math.sqrt(self.n_embd)
         scores = torch.matmul(q, k.transpose(-2, -1)) * scale
 
@@ -66,7 +72,7 @@ class SingleHeadCausalSelfAttention(nn.Module):
 class MultiHeadCausalSelfAttention(nn.Module):
     """A minimal multi-head masked self-attention module for decoder-only GPT."""
 
-    def __init__(self, *, n_embd: int, n_head: int) -> None:
+    def __init__(self, *, n_embd: int, n_head: int, use_rope: bool = False) -> None:
         super().__init__()
         if n_embd % n_head != 0:
             msg = "n_embd must be divisible by n_head"
@@ -79,6 +85,7 @@ class MultiHeadCausalSelfAttention(nn.Module):
         self.key = nn.Linear(n_embd, n_embd, bias=False)
         self.value = nn.Linear(n_embd, n_embd, bias=False)
         self.proj = nn.Linear(n_embd, n_embd, bias=False)
+        self.rope = RotaryEmbedding(self.head_dim) if use_rope else None
 
     def _split_heads(self, x: Tensor) -> Tensor:
         batch_size, sequence_length, _ = x.shape
@@ -90,13 +97,15 @@ class MultiHeadCausalSelfAttention(nn.Module):
         x = x.transpose(1, 2).contiguous()
         return x.view(batch_size, sequence_length, self.n_embd)
 
-    def forward(self, x: Tensor) -> Tensor:
-        return self.inspect(x)["output"]
+    def forward(self, x: Tensor, *, position_offset: int = 0) -> Tensor:
+        return self.inspect(x, position_offset=position_offset)["output"]
 
     def forward_with_cache(
         self,
         x: Tensor,
         cache: LayerCache | None = None,
+        *,
+        position_offset: int = 0,
     ) -> tuple[Tensor, LayerCache]:
         if x.ndim != 3:
             msg = "x must have shape (batch_size, sequence_length, n_embd)"
@@ -108,6 +117,9 @@ class MultiHeadCausalSelfAttention(nn.Module):
         q = self._split_heads(self.query(x))
         k_new = self._split_heads(self.key(x))
         v_new = self._split_heads(self.value(x))
+        if self.rope is not None:
+            q = self.rope.apply(q, position_offset=position_offset)
+            k_new = self.rope.apply(k_new, position_offset=position_offset)
 
         if cache is None:
             k_all = k_new
@@ -124,7 +136,7 @@ class MultiHeadCausalSelfAttention(nn.Module):
         merged = self._merge_heads(head_outputs)
         return self.proj(merged), (k_all, v_all)
 
-    def inspect(self, x: Tensor) -> dict[str, Tensor]:
+    def inspect(self, x: Tensor, *, position_offset: int = 0) -> dict[str, Tensor]:
         if x.ndim != 3:
             msg = "x must have shape (batch_size, sequence_length, n_embd)"
             raise ValueError(msg)
@@ -136,6 +148,9 @@ class MultiHeadCausalSelfAttention(nn.Module):
         q = self._split_heads(self.query(x))
         k = self._split_heads(self.key(x))
         v = self._split_heads(self.value(x))
+        if self.rope is not None:
+            q = self.rope.apply(q, position_offset=position_offset)
+            k = self.rope.apply(k, position_offset=position_offset)
 
         scale = 1.0 / math.sqrt(self.head_dim)
         scores = torch.matmul(q, k.transpose(-2, -1)) * scale

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass
+
 import torch
 from torch import Tensor, nn
 
@@ -9,35 +11,47 @@ from .blocks import RMSNorm, TransformerBlock
 from .embeddings import GPTInputEmbedding
 
 
+@dataclass(frozen=True)
+class GPTConfig:
+    vocab_size: int
+    block_size: int
+    n_layer: int
+    n_head: int
+    n_embd: int
+    expansion_factor: int = 4
+
+    def to_dict(self) -> dict[str, int]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, int]) -> GPTConfig:
+        return cls(**payload)
+
+
 class GPT(nn.Module):
     """A minimal decoder-only GPT model."""
 
     def __init__(
         self,
-        *,
-        vocab_size: int,
-        block_size: int,
-        n_layer: int,
-        n_head: int,
-        n_embd: int,
-        expansion_factor: int = 4,
+        config: GPTConfig,
     ) -> None:
         super().__init__()
+        self.config = config
         self.embedding = GPTInputEmbedding(
-            vocab_size=vocab_size,
-            block_size=block_size,
-            n_embd=n_embd,
+            vocab_size=config.vocab_size,
+            block_size=config.block_size,
+            n_embd=config.n_embd,
         )
         self.blocks = nn.ModuleList(
             TransformerBlock(
-                n_embd=n_embd,
-                n_head=n_head,
-                expansion_factor=expansion_factor,
+                n_embd=config.n_embd,
+                n_head=config.n_head,
+                expansion_factor=config.expansion_factor,
             )
-            for _ in range(n_layer)
+            for _ in range(config.n_layer)
         )
-        self.final_norm = RMSNorm(n_embd)
-        self.lm_head = nn.Linear(n_embd, vocab_size, bias=False)
+        self.final_norm = RMSNorm(config.n_embd)
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
     def forward(self, token_ids: Tensor) -> Tensor:
         x = self.embedding(token_ids)

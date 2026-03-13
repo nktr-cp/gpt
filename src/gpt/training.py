@@ -10,7 +10,7 @@ from torch import Tensor
 from torch.nn import functional as F
 
 from .dataset import build_token_stream, build_tokenizer, load_documents, sample_next_token_batch
-from .gpt import GPT
+from .gpt import GPT, GPTConfig
 from .tokenizer import CharTokenizer
 
 
@@ -24,6 +24,15 @@ class TrainingConfig:
     learning_rate: float = 1e-3
     num_steps: int = 200
     log_interval: int = 20
+
+    def model_config(self, vocab_size: int) -> GPTConfig:
+        return GPTConfig(
+            vocab_size=vocab_size,
+            block_size=self.block_size,
+            n_layer=self.n_layer,
+            n_head=self.n_head,
+            n_embd=self.n_embd,
+        )
 
 
 @dataclass(frozen=True)
@@ -45,13 +54,7 @@ def compute_loss(logits: Tensor, targets: Tensor) -> Tensor:
 def train_model(documents: list[str], config: TrainingConfig) -> TrainingArtifacts:
     tokenizer = build_tokenizer(documents)
     token_stream = build_token_stream(documents, tokenizer)
-    model = GPT(
-        vocab_size=tokenizer.vocab_size,
-        block_size=config.block_size,
-        n_layer=config.n_layer,
-        n_head=config.n_head,
-        n_embd=config.n_embd,
-    )
+    model = GPT(config.model_config(tokenizer.vocab_size))
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
 
     losses: list[float] = []

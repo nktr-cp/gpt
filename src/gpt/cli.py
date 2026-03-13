@@ -6,7 +6,8 @@ from pathlib import Path
 
 from .checkpoint import load_checkpoint, save_checkpoint
 from .data.download import dataset_path, download_names_dataset
-from .dataset import load_documents
+from .dataset import build_token_stream, load_documents
+from .evaluation import evaluate_model, split_token_stream
 from .generation import generate_text
 from .training import TrainingConfig, train_model
 
@@ -44,6 +45,8 @@ def build_parser() -> ArgumentParser:
     train_parser.add_argument("--prompt", default="a")
     train_parser.add_argument("--max-new-tokens", type=int, default=24)
     train_parser.add_argument("--temperature", type=float, default=1.0)
+    train_parser.add_argument("--top-k", type=int)
+    train_parser.add_argument("--no-kv-cache", action="store_true")
     train_parser.add_argument("--checkpoint-out", type=Path)
 
     generate_parser = subparsers.add_parser(
@@ -54,6 +57,18 @@ def build_parser() -> ArgumentParser:
     generate_parser.add_argument("--prompt", default="")
     generate_parser.add_argument("--max-new-tokens", type=int, default=24)
     generate_parser.add_argument("--temperature", type=float, default=1.0)
+    generate_parser.add_argument("--top-k", type=int)
+    generate_parser.add_argument("--no-kv-cache", action="store_true")
+
+    evaluate_parser = subparsers.add_parser(
+        "evaluate",
+        help="Load a checkpoint and report validation loss and perplexity.",
+    )
+    evaluate_parser.add_argument("checkpoint", type=Path)
+    evaluate_parser.add_argument("--dataset", type=Path, default=dataset_path())
+    evaluate_parser.add_argument("--batch-size", type=int, default=32)
+    evaluate_parser.add_argument("--num-batches", type=int, default=20)
+    evaluate_parser.add_argument("--validation-fraction", type=float, default=0.1)
     return parser
 
 
@@ -92,6 +107,8 @@ def main(argv: Sequence[str] | None = None) -> None:
             prompt=args.prompt,
             max_new_tokens=args.max_new_tokens,
             temperature=args.temperature,
+            top_k=args.top_k,
+            use_kv_cache=not args.no_kv_cache,
         )
         print(f"final_loss={artifacts.losses[-1]:.4f}")
         print(f"sample={sample}")
@@ -107,5 +124,26 @@ def main(argv: Sequence[str] | None = None) -> None:
             prompt=args.prompt,
             max_new_tokens=args.max_new_tokens,
             temperature=args.temperature,
+            top_k=args.top_k,
+            use_kv_cache=not args.no_kv_cache,
         )
         print(sample)
+        return
+
+    if args.command == "evaluate":
+        model, tokenizer, training_config = load_checkpoint(args.checkpoint)
+        documents = load_documents(args.dataset)
+        token_stream = build_token_stream(documents, tokenizer)
+        _, validation_stream = split_token_stream(
+            token_stream,
+            validation_fraction=args.validation_fraction,
+        )
+        metrics = evaluate_model(
+            model,
+            validation_stream,
+            batch_size=args.batch_size,
+            block_size=int(training_config["block_size"]),
+            num_batches=args.num_batches,
+        )
+        print(f"validation_loss={metrics.loss:.4f}")
+        print(f"perplexity={metrics.perplexity:.4f}")

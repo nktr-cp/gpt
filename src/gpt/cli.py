@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .data.download import dataset_path, download_names_dataset
 from .dataset import build_token_stream, build_tokenizer, load_documents, sample_next_token_batch
+from .model import GPTInputEmbedding
 
 
 def build_parser() -> ArgumentParser:
@@ -61,6 +62,35 @@ def build_parser() -> ArgumentParser:
         default=8,
         help="Context length for each training example.",
     )
+
+    embedding_parser = subparsers.add_parser(
+        "inspect-embeddings",
+        help="Inspect token and positional embedding shapes.",
+    )
+    embedding_parser.add_argument(
+        "--dataset",
+        type=Path,
+        default=dataset_path(),
+        help="Path to the plain text dataset.",
+    )
+    embedding_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=2,
+        help="Number of sampled sequences.",
+    )
+    embedding_parser.add_argument(
+        "--block-size",
+        type=int,
+        default=8,
+        help="Context length for each sampled sequence.",
+    )
+    embedding_parser.add_argument(
+        "--n-embd",
+        type=int,
+        default=16,
+        help="Embedding dimension.",
+    )
     return parser
 
 
@@ -95,3 +125,27 @@ def main(argv: Sequence[str] | None = None) -> None:
         print(f"y_shape={tuple(y.shape)}")
         print(f"x[0]={x[0].tolist()}")
         print(f"y[0]={y[0].tolist()}")
+        return
+
+    if args.command == "inspect-embeddings":
+        documents = load_documents(args.dataset)
+        tokenizer = build_tokenizer(documents)
+        token_stream = build_token_stream(documents, tokenizer)
+        x, _ = sample_next_token_batch(
+            token_stream,
+            batch_size=args.batch_size,
+            block_size=args.block_size,
+        )
+        embedding = GPTInputEmbedding(
+            vocab_size=tokenizer.vocab_size,
+            block_size=args.block_size,
+            n_embd=args.n_embd,
+        )
+        token_embeddings = embedding.token_embedding(x)
+        position_ids = embedding.position_embedding.weight[: x.size(1)]
+        combined = embedding(x)
+        print(f"x_shape={tuple(x.shape)}")
+        print(f"token_embeddings_shape={tuple(token_embeddings.shape)}")
+        print(f"position_embeddings_shape={tuple(position_ids.shape)}")
+        print(f"combined_shape={tuple(combined.shape)}")
+        print(f"num_parameters={embedding.num_parameters}")

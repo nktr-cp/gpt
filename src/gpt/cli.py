@@ -4,9 +4,10 @@ from argparse import ArgumentParser
 from collections.abc import Sequence
 from pathlib import Path
 
+from .attention import SingleHeadCausalSelfAttention
 from .data.download import dataset_path, download_names_dataset
 from .dataset import build_token_stream, build_tokenizer, load_documents, sample_next_token_batch
-from .model import GPTInputEmbedding, SingleHeadCausalSelfAttention
+from .embeddings import GPTInputEmbedding
 
 
 def build_parser() -> ArgumentParser:

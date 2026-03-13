@@ -11,7 +11,7 @@ from torch.nn import functional as F
 
 from .dataset import build_token_stream, build_tokenizer, load_documents, sample_next_token_batch
 from .gpt import GPT, GPTConfig
-from .tokenizer import CharTokenizer
+from .tokenizer import Tokenizer
 
 
 @dataclass(frozen=True)
@@ -24,6 +24,8 @@ class TrainingConfig:
     learning_rate: float = 1e-3
     num_steps: int = 200
     log_interval: int = 20
+    tokenizer_kind: str = "bpe"
+    bpe_vocab_size: int = 128
 
     def model_config(self, vocab_size: int) -> GPTConfig:
         return GPTConfig(
@@ -38,7 +40,7 @@ class TrainingConfig:
 @dataclass(frozen=True)
 class TrainingArtifacts:
     model: GPT
-    tokenizer: CharTokenizer
+    tokenizer: Tokenizer
     token_stream: Tensor
     losses: list[float]
 
@@ -52,7 +54,11 @@ def compute_loss(logits: Tensor, targets: Tensor) -> Tensor:
 
 
 def train_model(documents: list[str], config: TrainingConfig) -> TrainingArtifacts:
-    tokenizer = build_tokenizer(documents)
+    tokenizer = build_tokenizer(
+        documents,
+        tokenizer_kind=config.tokenizer_kind,
+        vocab_size=config.bpe_vocab_size,
+    )
     token_stream = build_token_stream(documents, tokenizer)
     model = GPT(config.model_config(tokenizer.vocab_size))
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)

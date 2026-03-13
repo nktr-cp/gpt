@@ -5,12 +5,12 @@ from __future__ import annotations
 import torch
 
 from .gpt import GPT
-from .tokenizer import CharTokenizer
+from .tokenizer import Tokenizer
 
 
 def generate_text(
     model: GPT,
-    tokenizer: CharTokenizer,
+    tokenizer: Tokenizer,
     *,
     prompt: str = "",
     max_new_tokens: int = 32,

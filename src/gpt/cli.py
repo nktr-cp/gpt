@@ -39,6 +39,8 @@ def build_parser() -> ArgumentParser:
     train_parser.add_argument("--learning-rate", type=float, default=1e-3)
     train_parser.add_argument("--num-steps", type=int, default=200)
     train_parser.add_argument("--log-interval", type=int, default=20)
+    train_parser.add_argument("--tokenizer-kind", choices=["char", "bpe"], default="bpe")
+    train_parser.add_argument("--bpe-vocab-size", type=int, default=128)
     train_parser.add_argument("--prompt", default="a")
     train_parser.add_argument("--max-new-tokens", type=int, default=24)
     train_parser.add_argument("--temperature", type=float, default=1.0)
@@ -72,6 +74,8 @@ def main(argv: Sequence[str] | None = None) -> None:
             learning_rate=args.learning_rate,
             num_steps=args.num_steps,
             log_interval=args.log_interval,
+            tokenizer_kind=args.tokenizer_kind,
+            bpe_vocab_size=args.bpe_vocab_size,
         )
         documents = load_documents(args.dataset)
         artifacts = train_model(documents, config)

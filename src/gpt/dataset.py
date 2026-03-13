@@ -8,20 +8,33 @@ from pathlib import Path
 import torch
 from torch import Tensor
 
-from .tokenizer import CharTokenizer
+from .tokenizer import BPETokenizer, CharTokenizer, Tokenizer, tokenizer_from_dict
 
 
 def load_documents(path: Path) -> list[str]:
     return [line.strip() for line in path.read_text().splitlines() if line.strip()]
 
 
-def build_tokenizer(documents: list[str]) -> CharTokenizer:
-    return CharTokenizer.fit(documents)
+def build_tokenizer(
+    documents: list[str],
+    *,
+    tokenizer_kind: str = "char",
+    vocab_size: int | None = None,
+) -> Tokenizer:
+    if tokenizer_kind == "char":
+        return CharTokenizer.fit(documents)
+    if tokenizer_kind == "bpe":
+        if vocab_size is None:
+            msg = "vocab_size is required for BPE tokenization"
+            raise ValueError(msg)
+        return BPETokenizer.fit(documents, vocab_size=vocab_size)
+    msg = f"unsupported tokenizer kind: {tokenizer_kind}"
+    raise ValueError(msg)
 
 
 def encode_documents(
     documents: list[str],
-    tokenizer: CharTokenizer,
+    tokenizer: Tokenizer,
     *,
     add_bos: bool = True,
     add_eos: bool = True,
@@ -35,7 +48,7 @@ def flatten_token_sequences(sequences: list[list[int]]) -> list[int]:
 
 def build_token_stream(
     documents: list[str],
-    tokenizer: CharTokenizer,
+    tokenizer: Tokenizer,
     *,
     add_bos: bool = True,
     add_eos: bool = True,
@@ -76,15 +89,15 @@ def sample_next_token_batch(
     return x, y
 
 
-def save_tokenizer(tokenizer: CharTokenizer, path: Path) -> Path:
+def save_tokenizer(tokenizer: Tokenizer, path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(tokenizer.to_dict(), indent=2))
     return path
 
 
-def load_tokenizer(path: Path) -> CharTokenizer:
+def load_tokenizer(path: Path) -> Tokenizer:
     payload = json.loads(path.read_text())
     if not isinstance(payload, dict):
         msg = "tokenizer payload must be a dictionary"
         raise TypeError(msg)
-    return CharTokenizer.from_dict(payload)
+    return tokenizer_from_dict(payload)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 from torch import Tensor, nn
 
-from .attention import MultiHeadCausalSelfAttention
+from .attention import LayerCache, MultiHeadCausalSelfAttention
 
 
 class RMSNorm(nn.Module):
@@ -53,3 +53,16 @@ class TransformerBlock(nn.Module):
         x = x + self.attention(self.attention_norm(x))
         x = x + self.feed_forward(self.feed_forward_norm(x))
         return x
+
+    def forward_with_cache(
+        self,
+        x: Tensor,
+        cache: LayerCache | None = None,
+    ) -> tuple[Tensor, LayerCache]:
+        attention_out, next_cache = self.attention.forward_with_cache(
+            self.attention_norm(x),
+            cache=cache,
+        )
+        x = x + attention_out
+        x = x + self.feed_forward(self.feed_forward_norm(x))
+        return x, next_cache

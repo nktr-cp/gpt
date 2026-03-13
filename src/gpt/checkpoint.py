@@ -8,14 +8,14 @@ from typing import Any
 import torch
 
 from .gpt import GPT, GPTConfig
-from .tokenizer import CharTokenizer
+from .tokenizer import Tokenizer, tokenizer_from_dict
 
 
 def save_checkpoint(
     *,
     path: Path,
     model: GPT,
-    tokenizer: CharTokenizer,
+    tokenizer: Tokenizer,
     training_config: dict[str, Any],
 ) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -29,11 +29,11 @@ def save_checkpoint(
     return path
 
 
-def load_checkpoint(path: Path) -> tuple[GPT, CharTokenizer, dict[str, Any]]:
+def load_checkpoint(path: Path) -> tuple[GPT, Tokenizer, dict[str, Any]]:
     payload = torch.load(path, weights_only=False)
     model_config = GPTConfig.from_dict(payload["model_config"])
     model = GPT(model_config)
     model.load_state_dict(payload["model_state_dict"])
-    tokenizer = CharTokenizer.from_dict(payload["tokenizer"])
+    tokenizer = tokenizer_from_dict(payload["tokenizer"])
     training_config = dict(payload["training_config"])
     return model, tokenizer, training_config

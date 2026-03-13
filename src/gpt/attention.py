@@ -7,6 +7,8 @@ import math
 import torch
 from torch import Tensor, nn
 
+LayerCache = tuple[Tensor, Tensor]
+
 
 def causal_mask(sequence_length: int, device: torch.device) -> Tensor:
     return torch.tril(torch.ones(sequence_length, sequence_length, device=device, dtype=torch.bool))
@@ -90,6 +92,37 @@ class MultiHeadCausalSelfAttention(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         return self.inspect(x)["output"]
+
+    def forward_with_cache(
+        self,
+        x: Tensor,
+        cache: LayerCache | None = None,
+    ) -> tuple[Tensor, LayerCache]:
+        if x.ndim != 3:
+            msg = "x must have shape (batch_size, sequence_length, n_embd)"
+            raise ValueError(msg)
+        if x.size(1) != 1:
+            msg = "forward_with_cache expects a single new token with shape (batch_size, 1, n_embd)"
+            raise ValueError(msg)
+
+        q = self._split_heads(self.query(x))
+        k_new = self._split_heads(self.key(x))
+        v_new = self._split_heads(self.value(x))
+
+        if cache is None:
+            k_all = k_new
+            v_all = v_new
+        else:
+            past_k, past_v = cache
+            k_all = torch.cat((past_k, k_new), dim=2)
+            v_all = torch.cat((past_v, v_new), dim=2)
+
+        scale = 1.0 / math.sqrt(self.head_dim)
+        scores = torch.matmul(q, k_all.transpose(-2, -1)) * scale
+        attention_weights = torch.softmax(scores, dim=-1)
+        head_outputs = torch.matmul(attention_weights, v_all)
+        merged = self._merge_heads(head_outputs)
+        return self.proj(merged), (k_all, v_all)
 
     def inspect(self, x: Tensor) -> dict[str, Tensor]:
         if x.ndim != 3:

@@ -15,6 +15,8 @@ def generate_text(
     prompt: str = "",
     max_new_tokens: int = 32,
     temperature: float = 1.0,
+    top_k: int | None = None,
+    use_kv_cache: bool = True,
 ) -> str:
     model.eval()
 
@@ -28,6 +30,8 @@ def generate_text(
         x,
         max_new_tokens=max_new_tokens,
         temperature=temperature,
+        top_k=top_k,
+        use_kv_cache=use_kv_cache,
     )[0].tolist()
 
     continuation = generated[1:]

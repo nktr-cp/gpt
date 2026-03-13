@@ -26,10 +26,7 @@ def encode_documents(
     add_bos: bool = True,
     add_eos: bool = True,
 ) -> list[list[int]]:
-    return [
-        tokenizer.encode(document, add_bos=add_bos, add_eos=add_eos)
-        for document in documents
-    ]
+    return [tokenizer.encode(document, add_bos=add_bos, add_eos=add_eos) for document in documents]
 
 
 def flatten_token_sequences(sequences: list[list[int]]) -> list[int]:

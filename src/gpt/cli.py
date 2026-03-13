@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .data.download import dataset_path, download_names_dataset
 from .dataset import build_token_stream, build_tokenizer, load_documents, sample_next_token_batch
-from .model import GPTInputEmbedding
+from .model import GPTInputEmbedding, SingleHeadCausalSelfAttention
 
 
 def build_parser() -> ArgumentParser:
@@ -91,6 +91,35 @@ def build_parser() -> ArgumentParser:
         default=16,
         help="Embedding dimension.",
     )
+
+    attention_parser = subparsers.add_parser(
+        "inspect-attention",
+        help="Inspect a single-head causal self-attention pass.",
+    )
+    attention_parser.add_argument(
+        "--dataset",
+        type=Path,
+        default=dataset_path(),
+        help="Path to the plain text dataset.",
+    )
+    attention_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=1,
+        help="Number of sampled sequences.",
+    )
+    attention_parser.add_argument(
+        "--block-size",
+        type=int,
+        default=8,
+        help="Context length for each sampled sequence.",
+    )
+    attention_parser.add_argument(
+        "--n-embd",
+        type=int,
+        default=16,
+        help="Embedding dimension.",
+    )
     return parser
 
 
@@ -149,3 +178,32 @@ def main(argv: Sequence[str] | None = None) -> None:
         print(f"position_embeddings_shape={tuple(position_ids.shape)}")
         print(f"combined_shape={tuple(combined.shape)}")
         print(f"num_parameters={embedding.num_parameters}")
+        return
+
+    if args.command == "inspect-attention":
+        documents = load_documents(args.dataset)
+        tokenizer = build_tokenizer(documents)
+        token_stream = build_token_stream(documents, tokenizer)
+        x, _ = sample_next_token_batch(
+            token_stream,
+            batch_size=args.batch_size,
+            block_size=args.block_size,
+        )
+        embedding = GPTInputEmbedding(
+            vocab_size=tokenizer.vocab_size,
+            block_size=args.block_size,
+            n_embd=args.n_embd,
+        )
+        embedded = embedding(x)
+        attention = SingleHeadCausalSelfAttention(n_embd=args.n_embd)
+        inspected = attention.inspect(embedded)
+        print(f"embedded_shape={tuple(embedded.shape)}")
+        print(f"q_shape={tuple(inspected['q'].shape)}")
+        print(f"scores_shape={tuple(inspected['scores'].shape)}")
+        print(f"attention_weights_shape={tuple(inspected['attention_weights'].shape)}")
+        print(f"output_shape={tuple(inspected['output'].shape)}")
+        print(f"mask_row_0={inspected['mask'][0].int().tolist()}")
+        print(f"mask_last_row={inspected['mask'][-1].int().tolist()}")
+        print(f"attention_row_0={inspected['attention_weights'][0, 0].tolist()}")
+        print(f"attention_last_row={inspected['attention_weights'][0, -1].tolist()}")
+        print(f"num_parameters={attention.num_parameters}")

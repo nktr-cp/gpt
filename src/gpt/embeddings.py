@@ -1,4 +1,4 @@
-"""Core model components for the GPT study project."""
+"""Embedding components for the GPT study project."""
 
 from __future__ import annotations
 

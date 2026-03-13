@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 from collections.abc import Sequence
 from pathlib import Path
 
+from .checkpoint import load_checkpoint, save_checkpoint
 from .data.download import dataset_path, download_names_dataset
 from .dataset import load_documents
 from .generation import generate_text
@@ -41,6 +42,16 @@ def build_parser() -> ArgumentParser:
     train_parser.add_argument("--prompt", default="a")
     train_parser.add_argument("--max-new-tokens", type=int, default=24)
     train_parser.add_argument("--temperature", type=float, default=1.0)
+    train_parser.add_argument("--checkpoint-out", type=Path)
+
+    generate_parser = subparsers.add_parser(
+        "generate",
+        help="Load a saved checkpoint and generate text from it.",
+    )
+    generate_parser.add_argument("checkpoint", type=Path)
+    generate_parser.add_argument("--prompt", default="")
+    generate_parser.add_argument("--max-new-tokens", type=int, default=24)
+    generate_parser.add_argument("--temperature", type=float, default=1.0)
     return parser
 
 
@@ -64,6 +75,13 @@ def main(argv: Sequence[str] | None = None) -> None:
         )
         documents = load_documents(args.dataset)
         artifacts = train_model(documents, config)
+        if args.checkpoint_out is not None:
+            save_checkpoint(
+                path=args.checkpoint_out,
+                model=artifacts.model,
+                tokenizer=artifacts.tokenizer,
+                training_config=config.__dict__.copy(),
+            )
         sample = generate_text(
             artifacts.model,
             artifacts.tokenizer,
@@ -73,3 +91,17 @@ def main(argv: Sequence[str] | None = None) -> None:
         )
         print(f"final_loss={artifacts.losses[-1]:.4f}")
         print(f"sample={sample}")
+        if args.checkpoint_out is not None:
+            print(f"checkpoint={args.checkpoint_out}")
+        return
+
+    if args.command == "generate":
+        model, tokenizer, _ = load_checkpoint(args.checkpoint)
+        sample = generate_text(
+            model,
+            tokenizer,
+            prompt=args.prompt,
+            max_new_tokens=args.max_new_tokens,
+            temperature=args.temperature,
+        )
+        print(sample)

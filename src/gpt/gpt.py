@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import torch
 from torch import Tensor, nn
 
 from .blocks import RMSNorm, TransformerBlock
@@ -44,3 +45,28 @@ class GPT(nn.Module):
             x = block(x)
         x = self.final_norm(x)
         return self.lm_head(x)
+
+    @torch.no_grad()
+    def generate(
+        self,
+        token_ids: Tensor,
+        *,
+        max_new_tokens: int,
+        temperature: float = 1.0,
+    ) -> Tensor:
+        if temperature <= 0:
+            msg = "temperature must be positive"
+            raise ValueError(msg)
+
+        generated = token_ids
+        block_size = self.embedding.block_size
+
+        for _ in range(max_new_tokens):
+            idx_cond = generated[:, -block_size:]
+            logits = self(idx_cond)
+            next_token_logits = logits[:, -1, :] / temperature
+            probs = torch.softmax(next_token_logits, dim=-1)
+            next_token = torch.multinomial(probs, num_samples=1)
+            generated = torch.cat((generated, next_token), dim=1)
+
+        return generated

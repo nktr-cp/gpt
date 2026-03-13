@@ -5,6 +5,9 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .data.download import dataset_path, download_names_dataset
+from .dataset import load_documents
+from .generation import generate_text
+from .training import TrainingConfig, train_model
 
 
 def build_parser() -> ArgumentParser:
@@ -21,6 +24,23 @@ def build_parser() -> ArgumentParser:
         default=dataset_path(),
         help="Where to store the downloaded dataset.",
     )
+
+    train_parser = subparsers.add_parser(
+        "train",
+        help="Run a minimal GPT training loop on the local names dataset.",
+    )
+    train_parser.add_argument("--dataset", type=Path, default=dataset_path())
+    train_parser.add_argument("--block-size", type=int, default=32)
+    train_parser.add_argument("--batch-size", type=int, default=32)
+    train_parser.add_argument("--n-layer", type=int, default=2)
+    train_parser.add_argument("--n-head", type=int, default=4)
+    train_parser.add_argument("--n-embd", type=int, default=64)
+    train_parser.add_argument("--learning-rate", type=float, default=1e-3)
+    train_parser.add_argument("--num-steps", type=int, default=200)
+    train_parser.add_argument("--log-interval", type=int, default=20)
+    train_parser.add_argument("--prompt", default="a")
+    train_parser.add_argument("--max-new-tokens", type=int, default=24)
+    train_parser.add_argument("--temperature", type=float, default=1.0)
     return parser
 
 
@@ -29,3 +49,27 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     if args.command == "download-names":
         print(download_names_dataset(destination=args.output))
+        return
+
+    if args.command == "train":
+        config = TrainingConfig(
+            block_size=args.block_size,
+            batch_size=args.batch_size,
+            n_layer=args.n_layer,
+            n_head=args.n_head,
+            n_embd=args.n_embd,
+            learning_rate=args.learning_rate,
+            num_steps=args.num_steps,
+            log_interval=args.log_interval,
+        )
+        documents = load_documents(args.dataset)
+        artifacts = train_model(documents, config)
+        sample = generate_text(
+            artifacts.model,
+            artifacts.tokenizer,
+            prompt=args.prompt,
+            max_new_tokens=args.max_new_tokens,
+            temperature=args.temperature,
+        )
+        print(f"final_loss={artifacts.losses[-1]:.4f}")
+        print(f"sample={sample}")

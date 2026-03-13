@@ -39,18 +39,29 @@ class FeedForward(nn.Module):
 class TransformerBlock(nn.Module):
     """A pre-norm decoder block with attention and feed-forward sublayers."""
 
-    def __init__(self, *, n_embd: int, n_head: int, expansion_factor: int = 4) -> None:
+    def __init__(
+        self,
+        *,
+        n_embd: int,
+        n_head: int,
+        expansion_factor: int = 4,
+        positional_strategy: str = "learned",
+    ) -> None:
         super().__init__()
         self.attention_norm = RMSNorm(n_embd)
-        self.attention = MultiHeadCausalSelfAttention(n_embd=n_embd, n_head=n_head)
+        self.attention = MultiHeadCausalSelfAttention(
+            n_embd=n_embd,
+            n_head=n_head,
+            use_rope=positional_strategy == "rope",
+        )
         self.feed_forward_norm = RMSNorm(n_embd)
         self.feed_forward = FeedForward(
             n_embd=n_embd,
             expansion_factor=expansion_factor,
         )
 
-    def forward(self, x: Tensor) -> Tensor:
-        x = x + self.attention(self.attention_norm(x))
+    def forward(self, x: Tensor, *, position_offset: int = 0) -> Tensor:
+        x = x + self.attention(self.attention_norm(x), position_offset=position_offset)
         x = x + self.feed_forward(self.feed_forward_norm(x))
         return x
 
@@ -58,10 +69,13 @@ class TransformerBlock(nn.Module):
         self,
         x: Tensor,
         cache: LayerCache | None = None,
+        *,
+        position_offset: int = 0,
     ) -> tuple[Tensor, LayerCache]:
         attention_out, next_cache = self.attention.forward_with_cache(
             self.attention_norm(x),
             cache=cache,
+            position_offset=position_offset,
         )
         x = x + attention_out
         x = x + self.feed_forward(self.feed_forward_norm(x))

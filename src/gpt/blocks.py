@@ -25,15 +25,39 @@ class RMSNorm(nn.Module):
 class FeedForward(nn.Module):
     """A position-wise feed-forward network."""
 
-    def __init__(self, *, n_embd: int, expansion_factor: int = 4) -> None:
+    def __init__(
+        self,
+        *,
+        n_embd: int,
+        expansion_factor: int = 4,
+        mlp_variant: str = "gelu",
+    ) -> None:
         super().__init__()
         hidden_dim = expansion_factor * n_embd
-        self.in_proj = nn.Linear(n_embd, hidden_dim, bias=False)
-        self.activation = nn.GELU()
+        self.mlp_variant = mlp_variant
+
+        if mlp_variant == "gelu":
+            self.in_proj = nn.Linear(n_embd, hidden_dim, bias=False)
+            self.activation = nn.GELU()
+            self.gate_proj: nn.Linear | None = None
+        elif mlp_variant == "swiglu":
+            self.in_proj = nn.Linear(n_embd, hidden_dim, bias=False)
+            self.activation = nn.SiLU()
+            self.gate_proj = nn.Linear(n_embd, hidden_dim, bias=False)
+        else:
+            msg = f"unsupported mlp_variant: {mlp_variant}"
+            raise ValueError(msg)
+
         self.out_proj = nn.Linear(hidden_dim, n_embd, bias=False)
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.out_proj(self.activation(self.in_proj(x)))
+        projected = self.in_proj(x)
+        if self.mlp_variant == "swiglu":
+            assert self.gate_proj is not None
+            projected = self.activation(projected) * self.gate_proj(x)
+        else:
+            projected = self.activation(projected)
+        return self.out_proj(projected)
 
 
 class TransformerBlock(nn.Module):
@@ -46,6 +70,7 @@ class TransformerBlock(nn.Module):
         n_head: int,
         expansion_factor: int = 4,
         positional_strategy: str = "learned",
+        mlp_variant: str = "gelu",
     ) -> None:
         super().__init__()
         self.attention_norm = RMSNorm(n_embd)
@@ -58,6 +83,7 @@ class TransformerBlock(nn.Module):
         self.feed_forward = FeedForward(
             n_embd=n_embd,
             expansion_factor=expansion_factor,
+            mlp_variant=mlp_variant,
         )
 
     def forward(self, x: Tensor, *, position_offset: int = 0) -> Tensor:

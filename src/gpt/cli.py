@@ -42,6 +42,11 @@ def build_parser() -> ArgumentParser:
         choices=["learned", "rope"],
         default="learned",
     )
+    train_parser.add_argument(
+        "--mlp-variant",
+        choices=["gelu", "swiglu"],
+        default="gelu",
+    )
     train_parser.add_argument("--learning-rate", type=float, default=1e-3)
     train_parser.add_argument("--num-steps", type=int, default=200)
     train_parser.add_argument("--log-interval", type=int, default=20)
@@ -92,6 +97,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             n_head=args.n_head,
             n_embd=args.n_embd,
             positional_strategy=args.positional_strategy,
+            mlp_variant=args.mlp_variant,
             learning_rate=args.learning_rate,
             num_steps=args.num_steps,
             log_interval=args.log_interval,

@@ -21,12 +21,13 @@ class GPTConfig:
     n_embd: int
     expansion_factor: int = 4
     positional_strategy: str = "learned"
+    mlp_variant: str = "gelu"
 
-    def to_dict(self) -> dict[str, int]:
+    def to_dict(self) -> dict[str, int | str]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, int]) -> GPTConfig:
+    def from_dict(cls, payload: dict[str, int | str]) -> GPTConfig:
         return cls(**payload)
 
 
@@ -51,6 +52,7 @@ class GPT(nn.Module):
                 n_head=config.n_head,
                 expansion_factor=config.expansion_factor,
                 positional_strategy=config.positional_strategy,
+                mlp_variant=config.mlp_variant,
             )
             for _ in range(config.n_layer)
         )

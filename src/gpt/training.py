@@ -27,6 +27,7 @@ class TrainingConfig:
     tokenizer_kind: str = "bpe"
     bpe_vocab_size: int = 128
     positional_strategy: str = "learned"
+    mlp_variant: str = "gelu"
 
     def model_config(self, vocab_size: int) -> GPTConfig:
         return GPTConfig(
@@ -36,6 +37,7 @@ class TrainingConfig:
             n_head=self.n_head,
             n_embd=self.n_embd,
             positional_strategy=self.positional_strategy,
+            mlp_variant=self.mlp_variant,
         )
 
 

@@ -35,12 +35,15 @@ uv run python -m gpt train \
 
 The command prints training loss and a sampled continuation at the end.
 
+To switch the MLP block to SwiGLU instead of the baseline GELU feed-forward, add
+`--mlp-variant swiglu`.
+
 ## Current scope
 
 - character-level tokenizer
 - next-token batch sampling
 - learned token and positional embeddings
 - single-head and multi-head causal self-attention
-- feed-forward network, residual connections, and RMSNorm
+- configurable GELU or SwiGLU feed-forward network, residual connections, and RMSNorm
 - decoder-only GPT model with LM head
 - minimal training loop and autoregressive generation
